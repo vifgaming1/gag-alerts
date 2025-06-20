@@ -8,6 +8,7 @@ try:
     import threading
     import webbrowser
     import pystray 
+    import os
 except ImportError:
     print("Required packages must be installed! Try:")
     print("pip install tkinter")
@@ -15,14 +16,13 @@ except ImportError:
     print("pip install time")
     print("pip install re")
     print("pip install playsound3")
-    print("Other modules: threading, webbrowser, os, sys, re, pystray, pillow")
+    print("Other modules: threading, webbrowser, os, sys, re, pystray, pillow, os")
     print("If \"pip\" does not work then please reinstall python.")
     raise("a")
 
 # Build a tkinter window
 app = tkinter.Tk()
-app.overrideredirect(1)
-app.title("Config")
+app.title("Made with <3 by vifgaming")
 
 app.update_idletasks()  # Ensure geometry info is updated
 screen_width = app.winfo_screenwidth()
@@ -72,70 +72,59 @@ txt_Title_Warning = tkinter.Label(app, text="It's recommended to start on about 
 txt_Title_Warning.pack()
 
 def rare_seed_alert(thing, more):
-    def countdown():
-        for i in range(10, 0, -1):
-            if cancel_flag[0]:
-                return
-            try:
-                label.config(text=f"{thing} (+{more}) is in stock\nOpening GAG in {i} seconds...")
-            except Exception as e:
-                print(e)
-                break
-            time.sleep(1)
-            if open_flag:
-                # Open Roblox place
-                webbrowser.open("roblox://experiences/start?placeId=126884695634066")
-                root.destroy() 
-                break
-        if not cancel_flag[0]:
-            webbrowser.open("roblox://experiences/start?placeId=126884695634066")
-            root.destroy()
-
-    p = playsound("alert.mp3", block=False)
-
-    def cancel():
-        cancel_flag[0] = True
-        p.stop()
-        root.destroy()
-        
-
-    def open():
-        open_flag = True
-        webbrowser.open("roblox://experiences/start?placeId=126884695634066")
-        p.stop()
-        root.destroy()
-
-    root = tkinter.Tk()
+    root = tkinter.Toplevel()
     root.title("Rare Seed Alert")
     root.geometry("400x200")
     root.resizable(False, False)
 
-    # Optional: add an image using Pillow
-    # image = Image.open("seed.png")
-    # photo = ImageTk.PhotoImage(image)
-    # img_label = tk.Label(root, image=photo)
-    # img_label.pack()
-
-    label = tkinter.Label(root, text="A rare seed/gear you selected is in stock", font=("Arial", 14), pady=20)
+    label = tkinter.Label(
+        root, 
+        text=f"A rare seed/gear you selected is in stock\n{thing} (+{more})", 
+        font=("Arial", 14), 
+        pady=20
+    )
     label.pack()
 
-    cancel_btn = tkinter.Button(root, text="Cancel", command=cancel, font=("Arial", 12))
+    def open_action():
+        if sound.is_alive():
+            sound.stop()
+        webbrowser.open("roblox://experiences/start?placeId=126884695634066")
+        root.destroy()
+
+    def cancel_action():
+        if sound.is_alive():
+            sound.stop()
+        root.destroy()
+
+    cancel_btn = tkinter.Button(root, text="Cancel", command=cancel_action, font=("Arial", 12))
     cancel_btn.pack(pady=10)
-    open_btn = tkinter.Button(root, text="Open GAG", command=open, font=("Arial", 12))
+
+    open_btn = tkinter.Button(root, text="Open GAG", command=open_action, font=("Arial", 12))
     open_btn.pack(pady=10)
 
-    cancel_flag = [False]
-    open_flag = False
+    # Countdown label update in the main thread 
+    def countdown(i=10):
+        if i == 0:
+            open_action()
+        else:
+            label.config(text=f"{thing} (+{more}) is in stock\nOpening GAG in {i} seconds...")
+            root.after(1000, countdown, i - 1)
 
-    threading.Thread(target=countdown, daemon=True).start()
+    countdown()
 
-    root.mainloop()
+    sound = playsound("alert.mp3", block=False)
+    sound.play(block=False)
+
+def rsa_threader(a, b):
+    print(f"Triggering alert for {a} (+{b})")
+    app.after(0, lambda: rare_seed_alert(a, b))
 
 def show_tray_icon():
 
     def on_exit(icon, item):
         icon.stop()
-        exit()
+        os.system(f"taskkill /pid {str(os.getppid())}")
+        
 
     image = Image.open("icon.png")  # Use a small 16x16 PNG or ICO icon
     menu = pystray.Menu(
@@ -149,55 +138,56 @@ def minimize_to_tray():
     threading.Thread(target=show_tray_icon, daemon=True).start()
 
 def actual_MainLoop():
+    def worker():
+        checking = []
+        for name, var in seedcheckbuttons.items():
+            if var.get():
+                checking.append(name)
+        for name, var in gearcheckbuttons.items():
+            if var.get():
+                checking.append(name)
 
-
-    checking = []
-    for name, var in seedcheckbuttons.items():
-        if var.get():
-            print(f"{name} is selected")
-            checking.append(name)
-    for name, var in gearcheckbuttons.items():
-        if var.get():
-            print(f"{name} is selected")
-            checking.append(name)
-    print(checking)
-    minimize_to_tray()
-    while True:
-        timestamp = int(time.time())
-
-        url = f"https://growagardenstock.com/api/stock?type=gear-seeds&ts={timestamp}"
-        response = requests.get(url)
-        data = response.json()
-
-        # Extract and print gear and seed stock
+        minimize_to_tray()
         
-        def parse_items(item_list):
-            result = {}
-            for item in item_list:
-                match = re.match(r"(.+?)\s\*\*x(\d+)\*\*", item)
-                if match:
-                    name = match.group(1).strip()
-                    count = int(match.group(2))
-                    result[name] = count
-            return result
+        while True:
+            timestamp = int(time.time())
+            url = f"https://growagardenstock.com/api/stock?type=gear-seeds&ts={timestamp}"
+            response = ""
+            try:
+                response = requests.get(url)
+            except ConnectionError:
+                response = '''{"updatedAt":1750425104889,"gear":["Cleaning Spray **x3**","Recall Wrench **x1**","Trowel **x2**","Basic Sprinkler **x1**","Favorite Tool **x3**","Watering Can **x2**","Harvest Tool **x2**"],"seeds":["Carrot **x5**","Blueberry **x3**","Tomato **x3**","Strawberry **x5**"]}'''
+            data = response.json()
 
-        seeds = parse_items(data.get("seeds", []))
-        gears = parse_items(data.get("gear", [])) 
+            def parse_items(item_list):
+                result = {}
+                for item in item_list:
+                    match = re.match(r"(.+?)\s\*\*x(\d+)\*\*", item)
+                    if match:
+                        name = match.group(1).strip()
+                        count = int(match.group(2))
+                        result[name] = count
+                return result
 
-        seed_match = [item for item in checking if item in seeds]
-        gear_match = [item for item in checking if item in gears]
+            seeds = parse_items(data.get("seeds", []))
+            gears = parse_items(data.get("gear", []))
 
-        if seed_match or gear_match:
+            print("Checking for:", checking)
+            print("Parsed seeds:", list(seeds.keys()))
+            print("Parsed gears:", list(gears.keys()))
+
+            seed_match = [item for item in checking if item in seeds]
+            gear_match = [item for item in checking if item in gears]
             combined = seed_match + gear_match
-            threading.Thread(target=rare_seed_alert, args=(combined[0], len(combined)-1), daemon=True).start()
-        
-        
 
-        print("Sleeping for 300 more seconds")
+            print(combined)
 
-        time.sleep(300)
-    
-    print("How did you get here?!")
+            if combined:
+                rsa_threader(combined[0], len(combined)-1)
+
+            time.sleep(300)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 btn_Start = tkinter.Button(app, text="Start!", command=actual_MainLoop)
 btn_Start.pack()
